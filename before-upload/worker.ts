@@ -11,7 +11,7 @@ export default async (context: PlatformContext, data: BeforeUploadRequest): Prom
 
         // We should only intercept the docker image's manifest, as for the same image there are multiple layers.
         // And only the manifest contains annotations and labels
-        if (data.metadata.repoPath.path.match(/^.*manifest.json$/g)) {
+        if (isDockerManifest(data)) {
 
             // We check if the manifest contains all the required properties
             const missingProperties = lookForMissingMandatoryProperties(data);
@@ -31,6 +31,10 @@ export default async (context: PlatformContext, data: BeforeUploadRequest): Prom
     }
 
     return { status, message, modifiedRepoPath: data.metadata.repoPath };
+}
+
+function isDockerManifest(data: BeforeUploadRequest): boolean {
+    return data.metadata.repoPath.path.match(/^.*manifest.json$/g) !== null;
 }
 
 function lookForMissingMandatoryProperties(data: BeforeUploadRequest): Array<string> {
