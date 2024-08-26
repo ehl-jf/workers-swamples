@@ -1,0 +1,16 @@
+{
+    "name": "check-image-labels",
+    "description": "Check image mandatory labels",
+    "filterCriteria": {
+        "artifactFilterCriteria": {
+            "repoKeys": [
+                "docker-local"
+            ]
+        }
+    },
+    "secrets": {},
+    "sourceCodePath": "./worker.ts",
+    "action": "BEFORE_UPLOAD",
+    "enabled": true,
+    "debug": true
+}
