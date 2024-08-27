@@ -1,7 +1,6 @@
 import { PlatformContext, BeforeUploadRequest, BeforeUploadResponse, UploadStatus } from 'jfrog-workers';
 
-const MANDATORY_PROPERTIES = ['company.prop1', 'company.prop2'];
-
+const PROJECT_KEY_LABEL = 'org.jfrog.artifactory.projectKey';
 
 export default async (context: PlatformContext, data: BeforeUploadRequest): Promise<BeforeUploadResponse> => {
     let status: UploadStatus = UploadStatus.UPLOAD_PROCEED;
@@ -12,19 +11,20 @@ export default async (context: PlatformContext, data: BeforeUploadRequest): Prom
         // We should only intercept the docker image's manifest, as for the same image there are multiple layers.
         // And only the manifest contains annotations and labels
         if (isDockerManifest(data)) {
+            const projectKey = getProjectKeyFromManifest(data);
 
-            // We check if the manifest contains all the required properties
-            const missingProperties = lookForMissingMandatoryProperties(data);
-            if (missingProperties.length > 0) {
-                // We stop the upload with an error message if mandatory properties are missing
+            if (!projectKey) {
                 status = UploadStatus.UPLOAD_STOP;
-                message = `The following properties are missing: ${missingProperties.join(', ')}`;
+                message = `The project key is missing. Please add the label ${PROJECT_KEY_LABEL} to the manifest.`;
+            } else if (!isProjectRepository(data, projectKey)) {
+                // We stop the upload which to be targeting a project repository
+                status = UploadStatus.UPLOAD_STOP;
+                message = `Not targetting a project '${projectKey}' repository`;
 
                 // We do a cleanup of the previously uploaded layers
                 await removePreviouslyUploadedLayers(context, data);
             }
         }
-
     } catch (x) {
         status = UploadStatus.UPLOAD_WARN;
         message = `Error: ${x.message}`;
@@ -37,14 +37,12 @@ function isDockerManifest(data: BeforeUploadRequest): boolean {
     return data.metadata.repoPath.path.match(/^.*manifest.json$/g) !== null;
 }
 
-function lookForMissingMandatoryProperties(data: BeforeUploadRequest): Array<string> {
-    const missingProperties = [];
-    for (const prop of MANDATORY_PROPERTIES) {
-        if (!getArtifactProperty(data, `docker.label.${prop}`)) {
-            missingProperties.push(prop);
-        }
-    }
-    return missingProperties;
+function getProjectKeyFromManifest(data: BeforeUploadRequest): string {
+    return getArtifactProperty(data, `docker.label.${PROJECT_KEY_LABEL}`);
+}
+
+function isProjectRepository(data: BeforeUploadRequest, projectKey: string): boolean {
+    return new RegExp(`${projectKey}-.+`).test(data.metadata.repoPath.key);
 }
 
 async function removePreviouslyUploadedLayers(context: PlatformContext, data: BeforeUploadRequest): Promise<void> {

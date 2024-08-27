@@ -1,6 +1,6 @@
 {
-    "name": "check-image-labels",
-    "description": "Check image mandatory labels",
+    "name": "check-project-repository",
+    "description": "Check that an image is uploaded to the correct repository",
     "filterCriteria": {
         "artifactFilterCriteria": {
             "repoKeys": [
