@@ -2,6 +2,8 @@ import { PlatformContext, BeforeCreateTokenRequest, BeforeCreateTokenResponse, C
 
 // The maximum number of tokens a user can have
 const MAX_TOKENS_PER_USERS = 10;
+const MAX_USER_TOKEN_EXPIRY = 31 * 24 * 60 * 60; // 1 month
+const MAX_SERVICE_TOKEN_EXPIRY = 365 * 24 * 60 * 60; // 1 year
 
 export default async (context: PlatformContext, data: BeforeCreateTokenRequest): Promise<BeforeCreateTokenResponse> => {
 
@@ -9,10 +11,19 @@ export default async (context: PlatformContext, data: BeforeCreateTokenRequest):
     let message: string = 'Proceed';
 
     try {
-        const subjectNumberOfTokens = await countUserTokens(context, data.tokenSpec.subject);
-        if (subjectNumberOfTokens >= MAX_TOKENS_PER_USERS) {
+        if (await subjectTokensCountExceedsMaximum(context, data.tokenSpec.subject)) {
             status = CreateTokenStatus.CREATE_TOKEN_STOP;
-            message = `The user already has ${subjectNumberOfTokens} tokens. The maximum number of tokens allowed per user is ${MAX_TOKENS_PER_USERS}.`;
+            message = `The maximum number of tokens per user (${MAX_TOKENS_PER_USERS}) has been reached.`;
+        }
+
+        else if (isUserToken(data) && tokenExpiryExceeds(data, MAX_USER_TOKEN_EXPIRY)) {
+            status = CreateTokenStatus.CREATE_TOKEN_STOP;
+            message = `Users tokens cannot exceed ${MAX_USER_TOKEN_EXPIRY} seconds.`;
+        }
+
+        else if (isServiceToken(data) && tokenExpiryExceeds(data, MAX_SERVICE_TOKEN_EXPIRY)) {
+            status = CreateTokenStatus.CREATE_TOKEN_STOP;
+            message = `Service tokens cannot exceed ${MAX_SERVICE_TOKEN_EXPIRY} seconds.`;
         }
     } catch (error) {
         // The platformHttp client throws PlatformHttpClientError if the HTTP request status is 400 or higher
@@ -35,4 +46,25 @@ async function countUserTokens(context: PlatformContext, subject: string): Promi
 
     const { tokens } = res.data;
     return tokens?.filter((token) => token.subject === subject).length || 0;
+}
+
+async function subjectTokensCountExceedsMaximum(context: PlatformContext, subject: string): Promise<boolean> {
+    return await countUserTokens(context, subject) + 1 >= MAX_TOKENS_PER_USERS;
+}
+
+function isUserToken(data: BeforeCreateTokenRequest) {
+    const [scope] = data.tokenSpec.scope;
+    return scope && scope === 'applied-permissions/user';
+}
+
+function isServiceToken(data: BeforeCreateTokenRequest) {
+    if (isUserToken(data)) {
+        return false;
+    }
+    const subject = data.tokenSpec.subject;
+    return subject && (/^[^/]+\/nodes\/[^/]+$/.test(subject) || !subject.include('/'));
+}
+
+function tokenExpiryExceeds(data: BeforeCreateTokenRequest, maxExpiry: number) {
+    return data.tokenSpec.expiry > maxExpiry;
 }

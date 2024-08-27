@@ -4,5 +4,6 @@
     "secrets": {},
     "sourceCodePath": "./worker.ts",
     "action": "BEFORE_CREATE_TOKEN",
-    "enabled": true
+    "enabled": true,
+    "debug": true
 }
