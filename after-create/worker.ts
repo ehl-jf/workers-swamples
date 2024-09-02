@@ -1,5 +1,12 @@
 import { PlatformContext, AfterCreateRequest, AfterCreateResponse } from 'jfrog-workers';
 
+/**
+ * This worker is used to intercept the creation of a Docker image.
+ * It checks if the image is signed and if not, it removes the image.
+ * An image is considered signed if a signature file exists for the manifest.
+ */
+
+// Worker entry point
 export default async (context: PlatformContext, data: AfterCreateRequest): Promise<AfterCreateResponse> => {
 
     let message = 'proceed';
@@ -20,10 +27,12 @@ export default async (context: PlatformContext, data: AfterCreateRequest): Promi
     return { message };
 }
 
+// Checks if the uploaded file is a Docker manifest (ends with manifest.json)
 function isDockerManifest(data: AfterCreateRequest): boolean {
     return data.metadata.repoPath.path.match(/^.*manifest.json$/g) !== null;
 }
 
+// Checks if the image is signed, by looking for a signature file.
 async function isSigned(context: PlatformContext, data: ReturnType<typeof extractRepoInfos>): Promise<boolean> {
     const manifestSha = await getImageSha256(context, data);
 
@@ -42,7 +51,7 @@ async function isSigned(context: PlatformContext, data: ReturnType<typeof extrac
     return false;
 }
 
-
+// Removes the image if it is not signed
 async function deleteImage(context: PlatformContext, data: ReturnType<typeof extractRepoInfos>): Promise<void> {
     const { repoKey, repoName, version } = data;
 
